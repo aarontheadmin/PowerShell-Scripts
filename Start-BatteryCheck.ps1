@@ -59,6 +59,7 @@ function Start-BatteryCheck {
                 Start-BatteryCheck
             } else {
                 $entry = [pscustomobject]@{
+                    SerialNumber          = (Get-CimInstance -Classname Win32_Bios).SerialNumber
                     ComputerName          = $env:COMPUTERNAME
                     BatteryCheckTimeStamp = Get-Date
                 }
