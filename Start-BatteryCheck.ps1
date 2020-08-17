@@ -8,18 +8,18 @@ function Get-SleepTime {
         [CmdletBinding()]
         param (
             [Parameter(Mandatory = $true)]
-            [string]
+            [string[]]
             $PowerOutput
         )
     
-        [int] (($PowerOutput -match 'Current DC Power Setting Index:\s') -replace '.*[^0x\d{6}$]') / 60
+        [int]([string]($PowerOutput -match 'Current DC Power Setting Index:\s') -replace '.*[^0x\d{6}$]')
     }
     
     [string]   $powerCfg = 'powercfg'
     [string[]] $scheme   = @('/Query', 'SCHEME_CURRENT')
     
-    [int] $dc_diskIdle  = Convert-IdleHexToSeconds { & $powerCfg $scheme SUB_SLEEP STANDBYIDLE }
-    [int] $dc_videoIdle = Convert-IdleHexToSeconds { & $powerCfg $scheme SUB_VIDEO VIDEOIDLE }
+    [int] $dc_diskIdle  = Convert-IdleHexToSeconds -PowerOutput ([string[]]{ & $powerCfg $scheme SUB_SLEEP STANDBYIDLE })
+    [int] $dc_videoIdle = Convert-IdleHexToSeconds ([string[]]{ & $powerCfg $scheme SUB_VIDEO VIDEOIDLE })
 
     [pscustomobject]@{
         DiskIdleDcSeconds   = $dc_diskIdle
