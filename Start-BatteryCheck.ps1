@@ -102,7 +102,7 @@ function Start-BatteryCheck {
         Write-Error $_ -ErrorAction Stop
     }
 
-    Get-SleepTime | Export-Csv -Path $originalIdleSettingsPath -NoTypeInformation -Force
+    #Get-SleepTime | Export-Csv -Path $originalIdleSettingsPath -NoTypeInformation -Force
 
     if ((& $batteryStatus) -eq 2) {
         Write-Output "When ready, unplug battery charger"
