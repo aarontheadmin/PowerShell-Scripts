@@ -1,3 +1,34 @@
+#Requires -Version 5.1
+
+function Get-SleepTime {
+    [CmdletBinding()]
+    param ()
+
+    function Convert-IdleHexToSeconds {
+        [CmdletBinding()]
+        param (
+            [Parameter(Mandatory = $true)]
+            [string]
+            $PowerOutput
+        )
+    
+        [int] (($PowerOutput -match 'Current DC Power Setting Index:\s') -replace '.*[^0x\d{6}$]') / 60
+    }
+    
+    [string]   $powerCfg = 'powercfg'
+    [string[]] $scheme   = @('/Query', 'SCHEME_CURRENT')
+    
+    [int] $dc_diskIdle  = Convert-IdleHexToSeconds { & $powerCfg $scheme SUB_SLEEP STANDBYIDLE }
+    [int] $dc_videoIdle = Convert-IdleHexToSeconds { & $powerCfg $scheme SUB_VIDEO VIDEOIDLE }
+
+    [pscustomobject]@{
+        DiskIdleDcSeconds   = $dc_diskIdle
+        ScreenIdleDcSeconds = $dc_videoIdle
+    }
+}
+
+
+
 function Start-BatteryCheck {
     <#
     .SYNOPSIS
@@ -32,16 +63,46 @@ function Start-BatteryCheck {
     .OUTPUTS
         None
     #>
-    [CmdletBinding()]
+    [CmdletBinding(DefaultParameterSetName = 'Default')]
     param (
-        [Parameter(Position = 0, ValueFromPipeline, ValueFromPipelineByPropertyName)]
+        [Parameter(
+            ParameterSetName                = 'Default',
+            Position                        = 0,
+            ValueFromPipeline               = $true,
+            ValueFromPipelineByPropertyName = $true)]
         [ValidateNotNullOrEmpty()]
         [ValidateScript( { Test-Path -Path (Split-Path -Path $_ -Parent) } )]
         [System.IO.FileInfo]
-        $Path = "$env:USERPROFILE\Desktop\BatteryCheck.csv"
+        $Path = "$env:USERPROFILE\Desktop\BatteryCheck.csv",
+
+        [Parameter(ParameterSetName = 'ResetIdleSettings')]
+        [switch]
+        $RestoreIdleSettings
     )
 
-    [scriptblock] $batteryStatus = { (Get-CimInstance -ClassName Win32_Battery).BatteryStatus }
+    if ($Null -eq (Get-CimInstance -ClassName Win32_Battery)) {
+        Write-Output "Battery not detected"
+        break
+    }
+
+    [string] $originalIdleSettingsPath = "$env:USERPROFILE\Desktop\original_idle_settings.csv"
+
+    if ($RestoreIdleSettings.IsPresent) {
+        $restoreSettings = Import-Csv -Path $originalIdleSettingsPath
+
+        & powercfg setdcvalueindex SCHEME_CURRENT SUB_SLEEP STANDBYIDLE $restoreSettings.DiskIdleDcSeconds
+        & powercfg setdcvalueindex SCHEME_CURRENT SUB_VIDEO VIDEOIDLE $restoreSettings.ScreenIdleDcSeconds
+
+        Write-Output "Restored idle settings"
+    }
+
+    try {
+        [scriptblock] $batteryStatus = { (Get-CimInstance -ClassName Win32_Battery).BatteryStatus }
+    } catch {
+        Write-Error $_ -ErrorAction Stop
+    }
+
+    Get-SleepTime | Export-Csv -Path $originalIdleSettingsPath -NoTypeInformation -Force
 
     if ((& $batteryStatus) -eq 2) {
         Write-Output "When ready, unplug battery charger"
