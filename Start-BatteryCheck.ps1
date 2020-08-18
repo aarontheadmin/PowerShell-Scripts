@@ -11,22 +11,26 @@ function Get-SleepTime {
             [string[]]
             $PowerOutput
         )
-    
-        [int]([string]($PowerOutput -match 'Current DC Power Setting Index:\s') -replace '.*[^0x\d{6}$]')
+
+        [string]($PowerOutput -match 'Current DC Power Setting Index:\s') -replace '.*[^0x\d{6}$]'
     }
-    
+
+
     [string]   $powerCfg = 'powercfg'
-    [string[]] $scheme   = @('/Query', 'SCHEME_CURRENT')
-    
-    [int] $dc_diskIdle  = Convert-IdleHexToSeconds -PowerOutput ([string[]]{ & $powerCfg $scheme SUB_SLEEP STANDBYIDLE })
-    [int] $dc_videoIdle = Convert-IdleHexToSeconds ([string[]]{ & $powerCfg $scheme SUB_VIDEO VIDEOIDLE })
+    [string[]] $scheme   = @('/Query', 'SCHEME_BALANCED')
+    [string]   $pattern  = '.*Current DC Power Setting Index:\s'
+
+    [System.Array] $powerCfgSubgroup = & $powerCfg $scheme SUB_SLEEP STANDBYIDLE
+    [int]          $standbyIdle      = [string] (($powerCfgSubgroup -match $pattern) -replace $pattern)
+
+    [System.Array] $powerCfgSubgroup = & $powerCfg $scheme SUB_VIDEO VIDEOIDLE
+    [int]          $videoIdle        = [string] (($powerCfgSubgroup -match $pattern) -replace $pattern)
 
     [pscustomobject]@{
-        DiskIdleDcSeconds   = $dc_diskIdle
-        ScreenIdleDcSeconds = $dc_videoIdle
+        StandbyIdle = $standbyIdle
+        VideoIdle   = $videoIdle
     }
 }
-
 
 
 function Start-BatteryCheck {
@@ -40,7 +44,7 @@ function Start-BatteryCheck {
         timespan to determine how long the battery was running for.
 
         This script executes itself when calling it, so there is no need for dot sourcing.
-        
+
         Executing the script with the battery charger connected prompts the message "When ready, disconnect battery
         charger". Immediately after disconnecting the battery charger, the script begins the battery check.
 
@@ -59,7 +63,7 @@ function Start-BatteryCheck {
 
     .INPUTS
         None
-    
+
     .OUTPUTS
         None
     #>
@@ -90,10 +94,11 @@ function Start-BatteryCheck {
     if ($RestoreIdleSettings.IsPresent) {
         $restoreSettings = Import-Csv -Path $originalIdleSettingsPath
 
-        & powercfg setdcvalueindex SCHEME_CURRENT SUB_SLEEP STANDBYIDLE $restoreSettings.DiskIdleDcSeconds
-        & powercfg setdcvalueindex SCHEME_CURRENT SUB_VIDEO VIDEOIDLE $restoreSettings.ScreenIdleDcSeconds
+        & powercfg setdcvalueindex SCHEME_CURRENT SUB_SLEEP STANDBYIDLE $restoreSettings.StandbyIdle
+        & powercfg setdcvalueindex SCHEME_CURRENT SUB_VIDEO VIDEOIDLE $restoreSettings.VideoIdle
 
         Write-Output "Restored idle settings"
+        break
     }
 
     try {
@@ -102,7 +107,7 @@ function Start-BatteryCheck {
         Write-Error $_ -ErrorAction Stop
     }
 
-    #Get-SleepTime | Export-Csv -Path $originalIdleSettingsPath -NoTypeInformation -Force
+    Get-SleepTime | Export-Csv -Path $originalIdleSettingsPath -NoTypeInformation -Force
 
     if ((& $batteryStatus) -eq 2) {
         Write-Output "When ready, unplug battery charger"
@@ -115,6 +120,12 @@ function Start-BatteryCheck {
     if ((& $batteryStatus) -eq 1) {
         Write-Output "Starting battery check..."
 
+        Write-Output "Setting PC sleep to Never"
+        & powercfg setdcvalueindex SCHEME_CURRENT SUB_SLEEP STANDBYIDLE 0
+
+        Write-Output "Setting screen timeout to Never"
+        & powercfg setdcvalueindex SCHEME_CURRENT SUB_VIDEO VIDEOIDLE 0
+
         do {
             if ((& $batteryStatus) -ne 1) {
                 Start-BatteryCheck
@@ -124,7 +135,6 @@ function Start-BatteryCheck {
                     ComputerName          = $env:COMPUTERNAME
                     BatteryCheckTimeStamp = Get-Date
                 }
-
                 $entry | Export-Csv -Path $Path -Append -NoTypeInformation
 
                 Start-Sleep -Seconds 1
@@ -135,4 +145,4 @@ function Start-BatteryCheck {
     }
 }
 
-Start-BatteryCheck
+#Start-BatteryCheck
