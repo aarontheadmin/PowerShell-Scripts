@@ -32,7 +32,6 @@ function Disable-ServicePlan {
 
                 # Remove Teams, since we do not want that to be disabled
                 $disabledServices = @($disabledServices, @($Name))
-                $disabledServices#; break
                 $licenseOptions = New-MsolLicenseOptions -AccountSkuId $AccountSkuId -DisabledPlans $disabledServices
 
                 Set-MsolUserLicense -UserPrincipalName $userPN -LicenseOptions $licenseOptions -ErrorAction Stop
@@ -91,6 +90,19 @@ function Enable-ServicePlan {
 [string[]] $users        = 'user@site.edu'
 [string[]] $serviceNames = 'TEAMS1'
 
+# first enable Teams
+foreach ($user in $users) {
+    $splat = @{
+        UserPrincipalName = $user
+        AccountSkuId      = 'biblewayacademy:M365EDU_A3_STUUSEBNFT'
+        Name              = $serviceNames
+    }
+    Enable-ServicePlan @splat
+}
+
+# wait for previous licensing changes to propagate
+Start-Sleep -Seconds 30
+
 # Disable
 foreach ($user in $users) {
     $splat = @{
@@ -99,16 +111,4 @@ foreach ($user in $users) {
         Name              = $serviceNames
     }
     Disable-ServicePlan @splat
-}
-
-# wait for previous licensing changes to propagate
-Start-Sleep -Seconds 30
-
-foreach ($user in $users) {
-    $splat = @{
-        UserPrincipalName = $user
-        AccountSkuId      = 'biblewayacademy:M365EDU_A3_STUUSEBNFT'
-        Name              = $serviceNames
-    }
-    Enable-ServicePlan @splat
 }
