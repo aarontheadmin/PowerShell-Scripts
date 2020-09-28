@@ -1,6 +1,3 @@
-#Requires -Version 5.1
-#Requires -PSEdition Desktop
-
 function Invoke-AADLicenseChange {
     <#
     .SYNOPSIS
@@ -18,15 +15,15 @@ function Invoke-AADLicenseChange {
     .PARAMETER UserPrincipalName
         The user principal name (email address)
 
-    .PARAMETER SkuPartNumber
+    .PARAMETER RemoveSkuPartNumber
         The SKU part number of the license to be removed from the account.
 
-    .PARAMETER NewSkuPartNumber
+    .PARAMETER AddSkuPartNumber
         The SKU part number of the license to be added to the account.
 
     .EXAMPLE
         PS C:\Scripts\> Invoke-AADLicenseChange -UserPrincipalName student@domain.edu `
-        >> -SkuPartNumber STANDARDWOFFPACK_IW_STUDENT -NewSkuPartNumber M365EDU_A3_STUUSEBNFT
+        >> -RemoveSkuPartNumber STANDARDWOFFPACK_IW_STUDENT -AddSkuPartNumber M365EDU_A3_STUUSEBNFT
         Processed student@domain.edu
 
         The example above removes "Office 365 A1 Plus for students" license and assigns a "Microsoft 365 A3 for
@@ -34,8 +31,8 @@ function Invoke-AADLicenseChange {
 
     .EXAMPLE
         PS C: \Scripts\> $array = 'student.1@domain.edu', 'student.2@domain.edu', 'student.3@domain.edu'
-        PS C: \Scripts\> $array | Invoke-AADLicenseChange -SkuPartNumber STANDARDWOFFPACK_IW_STUDENT `
-        >> -NewSkuPartNumber M365EDU_A3_STUUSEBNFT
+        PS C: \Scripts\> $array | Invoke-AADLicenseChange -RemoveSkuPartNumber STANDARDWOFFPACK_IW_STUDENT `
+        >> -AddSkuPartNumber M365EDU_A3_STUUSEBNFT
         Processed student.1@domain.edu
         Processed student.2@domain.edu
         Processed student.3@domain.edu
@@ -46,7 +43,7 @@ function Invoke-AADLicenseChange {
 
     .NOTES
         Authored by Aaron Hardy 2020
-        Version 1.0
+        Version 1.0.2
     #>
     [CmdletBinding()]
     param (
@@ -61,12 +58,12 @@ function Invoke-AADLicenseChange {
         [Parameter()]
         [ValidateNotNullOrEmpty()]
         [string[]]
-        $SkuPartNumber,
+        $RemoveSkuPartNumber,
 
         [Parameter()]
         [ValidateNotNullOrEmpty()]
         [string[]]
-        $NewSkuPartNumber
+        $AddSkuPartNumber
     )
 
     process {
@@ -74,10 +71,10 @@ function Invoke-AADLicenseChange {
             [string] $userUPN = $_
         
             # Unassign licenses
-            if ($SkuPartNumber.Count -gt 0) {
+            if ($RemoveSkuPartNumber.Count -gt 0) {
                 $oldLicenses = New-Object -TypeName Microsoft.Open.AzureAD.Model.AssignedLicenses
 
-                $oldLicenses.RemoveLicenses = foreach ($sku In $SkuPartNumber) {
+                $oldLicenses.RemoveLicenses = foreach ($sku In $RemoveSkuPartNumber) {
                     Get-AzureADSubscribedSku |
                         Where-Object -Property SkuPartNumber $sku -EQ |
                         Select-Object -ExpandProperty SkuID
@@ -87,12 +84,12 @@ function Invoke-AADLicenseChange {
             }
 
             # Assign licenses
-            if ($NewSkuPartNumber.Count -gt 0) {
-                $allNewLicenses = foreach ($newSku in $NewSkuPartNumber) {
+            if ($AddSkuPartNumber.Count -gt 0) {
+                $allNewLicenses = foreach ($sku in $AddSkuPartNumber) {
                     $newLicense = New-Object -TypeName Microsoft.Open.AzureAD.Model.AssignedLicense
 
                     $newLicense.SkuId = Get-AzureADSubscribedSku |
-                        Where-Object -Property SkuPartNumber -Value $newSku -EQ |
+                        Where-Object -Property SkuPartNumber -Value $sku -EQ |
                         Select-Object -ExpandProperty SkuID
 
                     $newLicense
