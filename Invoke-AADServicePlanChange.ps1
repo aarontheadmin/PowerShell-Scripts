@@ -1,5 +1,6 @@
 #Requires -PSEdition 'Desktop'
 #Requires -Version 5.1
+#Requires -Modules AzureAD
 
 function Invoke-AADServicePlanChange {
     <#
